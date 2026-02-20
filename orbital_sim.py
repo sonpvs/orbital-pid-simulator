@@ -14,7 +14,8 @@ STATION_COLOR = (200, 200, 200)
 FUEL_COLOR = (255, 50, 50)
 UI_GREEN = (0, 255, 150)
 SHIP_BODY = (220, 220, 220)
-RADAR_BG = (10, 25, 10) # Màu xanh quân đội tối cho radar
+RADAR_BG = (10, 25, 10) 
+PANEL_BG = (20, 20, 30, 180) # Bảng thông số có độ trong suốt
 
 class Particle:
     def __init__(self, pos, vel):
@@ -98,34 +99,53 @@ def draw_spaceship(screen, pos, vel):
     pygame.draw.polygon(screen, SHIP_BODY, rotated_points)
 
 def draw_radar(screen, game):
-    """Vẽ radar thu nhỏ ở góc màn hình"""
     radar_size = 150
     radar_x, radar_y = 20, HEIGHT - radar_size - 20
     radar_center = (radar_x + radar_size // 2, radar_y + radar_size // 2)
-    
-    # Vẽ khung radar
     pygame.draw.rect(screen, RADAR_BG, (radar_x, radar_y, radar_size, radar_size))
     pygame.draw.rect(screen, UI_GREEN, (radar_x, radar_y, radar_size, radar_size), 2)
-    
-    # Tỉ lệ thu nhỏ (Scale down)
-    scale = radar_size / 1000 # 1000 pixel thực tế = 150 pixel radar
-    
-    # 1. Trái đất trên radar
+    scale = radar_size / 1000 
     pygame.draw.circle(screen, EARTH_BLUE, radar_center, int(30 * scale) + 1)
-    
-    # 2. Trạm ISS trên radar (Chấm trắng)
     st_x = game.station_r * math.cos(game.station_angle) * scale
     st_y = game.station_r * math.sin(game.station_angle) * scale
     pygame.draw.circle(screen, STATION_COLOR, (int(radar_center[0] + st_x), int(radar_center[1] + st_y)), 3)
-    
-    # 3. Phi thuyền trên radar (Chấm vàng)
     sh_x = game.pos[0] * scale
     sh_y = game.pos[1] * scale
     pygame.draw.circle(screen, (255, 215, 0), (int(radar_center[0] + sh_x), int(radar_center[1] + sh_y)), 3)
 
+def draw_telemetry(screen, game, font):
+    """Vẽ bảng thông số vận tốc và vị trí chi tiết"""
+    panel_w, panel_h = 280, 160
+    panel_x, panel_y = WIDTH - panel_w - 20, 20
+    
+    # Tính toán thông số
+    alt = math.sqrt(game.pos[0]**2 + game.pos[1]**2)
+    vel = math.sqrt(game.vel[0]**2 + game.vel[1]**2)
+    
+    # Vẽ nền bảng thông số
+    s = pygame.Surface((panel_w, panel_h), pygame.SRCALPHA)
+    pygame.draw.rect(s, (30, 30, 50, 180), (0, 0, panel_w, panel_h), border_radius=10)
+    screen.blit(s, (panel_x, panel_y))
+    pygame.draw.rect(screen, UI_GREEN, (panel_x, panel_y, panel_w, panel_h), 1, border_radius=10)
+
+    # Nội dung hiển thị
+    data = [
+        ("--- TELEMETRY DATA ---", UI_GREEN),
+        (f"ALTITUDE:  {alt:.2f} km", (255, 255, 255)),
+        (f"VELOCITY:  {vel:.2f} m/s", (255, 255, 255)),
+        (f"POS X:     {game.pos[0]:.1f}", (200, 200, 200)),
+        (f"POS Y:     {game.pos[1]:.1f}", (200, 200, 200)),
+        (f"FUEL LEVEL: {int(game.fuel)} kg", (255, 100, 100) if game.fuel < 300 else UI_GREEN)
+    ]
+
+    for i, (text, color) in enumerate(data):
+        img = font.render(text, True, color)
+        screen.blit(img, (panel_x + 15, panel_y + 15 + i * 22))
+
 def main():
     pygame.init()
     screen = pygame.display.set_mode((WIDTH, HEIGHT))
+    pygame.display.set_caption("Orbital Navigator v4.5")
     clock = pygame.time.Clock()
     font = pygame.font.SysFont("Consolas", 18)
     game = SpaceGame()
@@ -148,7 +168,7 @@ def main():
 
         status = game.update(auto_pilot, manual_thrust)
 
-        # Vẽ Trái Đất & Trạm
+        # Vẽ các vật thể
         pygame.draw.circle(screen, EARTH_BLUE, CENTER, 30)
         st_x = int(game.station_r * math.cos(game.station_angle) + CENTER[0])
         st_y = int(game.station_r * math.sin(game.station_angle) + CENTER[1])
@@ -157,13 +177,14 @@ def main():
         for p in game.particles: p.draw(screen)
         draw_spaceship(screen, (game.pos[0] + CENTER[0], game.pos[1] + CENTER[1]), game.vel)
 
-        # Vẽ Radar
+        # Vẽ Radar và Bảng thông số (Telemetry)
         draw_radar(screen, game)
+        draw_telemetry(screen, game, font)
 
-        # UI
-        ui_lines = [f"FUEL: {int(game.fuel)} kg", f"AUTO-PILOT: {'ON' if auto_pilot else 'OFF'}", f"STATUS: {status}"]
-        for i, text in enumerate(ui_lines):
-            screen.blit(font.render(text, True, UI_GREEN), (20, 20 + i*25))
+        # UI Trạng thái hệ thống (Góc trái)
+        status_color = UI_GREEN if "SUCCESS" in status or "ACTIVE" in status else (255, 255, 255)
+        screen.blit(font.render(f"SYSTEM STATUS: {status}", True, status_color), (20, 20))
+        screen.blit(font.render(f"PILOT MODE: {'AUTO' if auto_pilot else 'MANUAL'}", True, UI_GREEN), (20, 45))
 
         pygame.display.flip()
         clock.tick(60)
